@@ -8,18 +8,30 @@
 #include <MFRC522.h>
 
 
-//DEFINIÇÃO DE IP FIXO PARA O NODEMCU
-IPAddress ip(192,168,1,175); //COLOQUE UMA FAIXA DE IP DISPONÍVEL DO SEU ROTEADOR. EX: 192.168.1.110 **** ISSO VARIA, NO MEU CASO É: 192.168.0.175
-IPAddress gateway(192,168,1,1); //GATEWAY DE CONEXÃO (ALTERE PARA O GATEWAY DO SEU ROTEADOR)
-IPAddress subnet(255,255,255,0); //MASCARA DE REDE
 
-// ----- Definições -----
+//Celular
+
+String URL = "192.168.84.81";
+
+#define WIFI_NAME   "Cantina 4"
+#define WIFI_PASS   "luizFolador"
+
+//Casa
+/* String URL = "192.168.1.106";
+
 #define WIFI_NAME   "Ana Maria_EXT"
 #define WIFI_PASS   "anamaria123"
+ */
+
+
+// ----- Definições -----
 #define SS_PIN D8
 #define RST_PIN D0
-#define LED_RED D3
-#define LED_GREEN D4
+#define SENSOR_PIN D1
+#define TRANCA D2
+
+int sensorValue = 0;
+
 
 // ----- Variáveis globais -----
 ESP8266WebServer server(80);
@@ -40,15 +52,10 @@ void setup(void) {
   // Inicializa a comunicação serial
   Serial.begin(115200);
 
-  pinMode(LED_GREEN, OUTPUT);
-  pinMode(LED_RED, OUTPUT);
-  digitalWrite(LED_GREEN, LOW);
-  digitalWrite(LED_RED, LOW);
 
   // Configura o WiFi
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_NAME, WIFI_PASS);
-  WiFi.config(ip, gateway, subnet); //PASSA OS PARÂMETROS PARA A FUNÇÃO QUE VAI SETAR O IP FIXO NO NODEMCU
   Serial.println("Conectando à rede...");
 
   // Aguarda conexão
@@ -76,17 +83,31 @@ void setup(void) {
   for (byte i = 0; i < 6; i++) {
     key.keyByte[i] = 0xFF;
   }
+
+  pinMode(SENSOR_PIN, INPUT);
+  pinMode(TRANCA, OUTPUT);
+
+  digitalWrite(TRANCA, LOW); 
 }
 
 void loop(void) {
 
+  sensorValue = digitalRead(SENSOR_PIN);
+
   // Responde às requisições feitas
   server.handleClient();
 
-  delay(5000);
+  //delay(5000);
 
   //abrir porta
   handle_abrir_porta();
+
+
+  if (sensorValue == LOW) {
+    Serial.println("Porta aberta");
+  } else {
+    Serial.println("Porta fechada");
+  }
 }
 
 void handle_salvar_rfid(){
@@ -96,7 +117,7 @@ void handle_salvar_rfid(){
   
   rfid_data = handle_leitura_rfid();
 
-  http.begin(client,"http://192.168.1.103:3000/users/rfid");
+  http.begin(client,"http://"+ URL +":3000/users/rfid");
 
   http.addHeader("Content-Type", "application/json");
 
@@ -104,14 +125,10 @@ void handle_salvar_rfid(){
 
   if (httpCode > 0) {
     if(httpCode == HTTP_CODE_CREATED){
-      digitalWrite(LED_GREEN, HIGH);
-      delay(2000);
-      digitalWrite(LED_GREEN, LOW);
+      Serial.println("cadastrou");
     }
     else{
-      digitalWrite(LED_RED, HIGH);
-      delay(2000);
-      digitalWrite(LED_RED, LOW);
+      Serial.println("não cadastrou");
     }
   }
 
@@ -126,22 +143,24 @@ void handle_abrir_porta(){
     String rfid_data = "";
   
     rfid_data = handle_leitura_rfid();
+    Serial.println(rfid_data);
 
-    http.begin(client,"http://192.168.1.103:3000/user-lock/unlock");
+    http.begin(client,"http://"+ URL + ":3000/user-lock/unlock");
     http.addHeader("Content-Type", "application/json");
 
     int httpCode = http.POST("{\"rfId\":\""+ rfid_data + "\", \"lockId\":\""+ lockId + "\"}");
+    //Serial.println(httpCode);
+
 
     if (httpCode > 0) {
       if(httpCode == HTTP_CODE_CREATED){
-        digitalWrite(LED_GREEN, HIGH);
-        delay(2000);
-        digitalWrite(LED_GREEN, LOW);
+        Serial.println("abriuu");
+        digitalWrite(TRANCA, HIGH); 
+        delay(3000);           
+        digitalWrite(TRANCA, LOW);  
       }
       else{
-        digitalWrite(LED_RED, HIGH);
-        delay(2000);
-        digitalWrite(LED_RED, LOW);
+        Serial.println("não abriuu");
       }
     }
 
@@ -173,4 +192,3 @@ String saveHex(byte *buffer, byte bufferSize) {
 
   return rfid_data;
 }
-
